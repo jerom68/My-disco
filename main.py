@@ -1,161 +1,172 @@
-import os
 import discord
-import random
+from discord.ext import commands
 import aiohttp
-import asyncio
-from discord.ext import commands, tasks
-from flask import Flask
+import random
+import time
+import os
 
-# Flask app for Render port binding
-app = Flask(__name__)
+intents = discord.Intents.default()
+intents.typing = False
+intents.presences = False
+intents.members = True  # Required for user info commands
 
-@app.route("/")
-def home():
-    return "Bot is running!"
-
-# Discord bot setup
-TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Set this in Render environment variables
-intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Auto Slowmode (applies to every channel)
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
-    for guild in bot.guilds:
-        for channel in guild.text_channels:
-            try:
-                await channel.edit(slowmode_delay=5)  # 5 seconds slowmode
-            except discord.Forbidden:
-                print(f"Missing permissions for {channel.name}")
+    print(f"✅ Logged in as {bot.user}")
+    
+# 🏓 Ping Command
+@bot.command()
+async def ping(ctx):
+    start_time = time.time()
+    message = await ctx.send("Pinging...")
+    end_time = time.time()
+    latency = round(bot.latency * 1000)
+    response_time = round((end_time - start_time) * 1000)
+    await message.edit(content=f"🏓 Pong! Latency: {latency}ms | Response Time: {response_time}ms")
 
-# DM new members with avatar image
-@bot.event
-async def on_member_join(member):
-    try:
-        avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
-        embed = discord.Embed(title="Welcome!", description=f"Hello {member.mention}, welcome to the server!", color=discord.Color.blue())
-        embed.set_image(url=avatar_url)
-        await member.send(embed=embed)
-    except discord.HTTPException:
-        print(f"Could not DM {member}")
+# 🎱 8Ball Command
+@bot.command()
+async def eightball(ctx, *, question):
+    responses = ["Yes!", "No.", "Maybe...", "Definitely!", "Not sure.", "Ask again later."]
+    await ctx.send(f"🎱 {random.choice(responses)}")
 
-# Fun game (Rock-Paper-Scissors)
+# 😂 Joke Command
+@bot.command()
+async def joke(ctx):
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://official-joke-api.appspot.com/random_joke") as resp:
+            if resp.status == 200:
+                joke_data = await resp.json()
+                await ctx.send(f"{joke_data['setup']} - {joke_data['punchline']}")
+            else:
+                await ctx.send("Couldn't fetch a joke at the moment!")
+
+# 🤯 Fun Fact Command
+@bot.command()
+async def fact(ctx):
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://uselessfacts.jsph.pl/random.json?language=en") as resp:
+            if resp.status == 200:
+                fact_data = await resp.json()
+                await ctx.send(f"💡 Fun Fact: {fact_data['text']}")
+            else:
+                await ctx.send("Couldn't fetch a fun fact at the moment!")
+
+# 📚 Manga Search Command
+@bot.command()
+async def manga(ctx, *, name):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://api.jikan.moe/v4/manga?q={name}") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data["data"]:
+                    manga_info = data["data"][0]
+                    embed = discord.Embed(title=manga_info["title"], url=manga_info["url"], color=discord.Color.blue())
+                    embed.add_field(name="📖 Synopsis", value=manga_info["synopsis"][:500] + "...", inline=False)
+                    embed.set_image(url=manga_info["images"]["jpg"]["image_url"])
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send("No manga found with that name!")
+            else:
+                await ctx.send("Couldn't fetch manga details at the moment.")
+
+# 🎴 Anime Image Commands
+@bot.command()
+async def waifu(ctx):
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://api.waifu.pics/sfw/waifu") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                await ctx.send(data["url"])
+
+@bot.command()
+async def husbando(ctx):
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://api.waifu.pics/sfw/husbando") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                await ctx.send(data["url"])
+
+@bot.command()
+async def neko(ctx):
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://api.waifu.pics/sfw/neko") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                await ctx.send(data["url"])
+
+# 🖼 Avatar Command
+@bot.command()
+async def avatar(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    embed = discord.Embed(title=f"{member.name}'s Avatar", color=discord.Color.purple())
+    embed.set_image(url=member.avatar.url)
+    await ctx.send(embed=embed)
+
+# 🌐 Server Info Command
+@bot.command()
+async def serverinfo(ctx):
+    guild = ctx.guild
+    embed = discord.Embed(title=f"Server Info - {guild.name}", color=discord.Color.gold())
+    embed.add_field(name="👥 Members", value=guild.member_count, inline=True)
+    embed.add_field(name="📂 Channels", value=len(guild.channels), inline=True)
+    embed.add_field(name="🔰 Roles", value=len(guild.roles), inline=True)
+    embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+    await ctx.send(embed=embed)
+
+# 🆔 User Info Command
+@bot.command()
+async def userinfo(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    embed = discord.Embed(title=f"User Info - {member.name}", color=discord.Color.green())
+    embed.set_thumbnail(url=member.avatar.url)
+    embed.add_field(name="👤 Username", value=member.name, inline=True)
+    embed.add_field(name="🏷️ ID", value=member.id, inline=True)
+    embed.add_field(name="📅 Joined At", value=member.joined_at.strftime("%Y-%m-%d"), inline=True)
+    embed.add_field(name="🎭 Roles", value=", ".join([role.name for role in member.roles if role.name != "@everyone"]), inline=False)
+    await ctx.send(embed=embed)
+
+# 🎭 Rock-Paper-Scissors Command
 @bot.command()
 async def rps(ctx, choice: str):
-    options = ["rock", "paper", "scissors"]
-    bot_choice = random.choice(options)
-    result = f"You chose {choice}, I chose {bot_choice}."
-
+    choices = ["rock", "paper", "scissors"]
+    if choice.lower() not in choices:
+        await ctx.send("Choose **rock, paper, or scissors**.")
+        return
+    bot_choice = random.choice(choices)
     if choice == bot_choice:
-        result += " It's a tie!"
-    elif (choice == "rock" and bot_choice == "scissors") or \
-         (choice == "paper" and bot_choice == "rock") or \
-         (choice == "scissors" and bot_choice == "paper"):
-        result += " You win!"
+        result = "It's a tie!"
+    elif (choice == "rock" and bot_choice == "scissors") or (choice == "scissors" and bot_choice == "paper") or (choice == "paper" and bot_choice == "rock"):
+        result = "You win! 🎉"
     else:
-        result += " I win!"
+        result = "I win! 😈"
+    await ctx.send(f"**You chose:** {choice}\n**I chose:** {bot_choice}\n**{result}**")
 
-    await ctx.send(result)
-
-# Pokémon info command
-@bot.command()
-async def pokemon(ctx, name: str):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f"https://pokeapi.co/api/v2/pokemon/{name.lower()}") as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                embed = discord.Embed(title=name.capitalize(), color=discord.Color.red())
-                embed.set_image(url=data["sprites"]["front_default"])
-                embed.add_field(name="Type", value=", ".join(t["type"]["name"] for t in data["types"]))
-                await ctx.send(embed=embed)
-            else:
-                await ctx.send("Pokémon not found!")
-
-# Anime quotes
-@bot.command()
-async def animequote(ctx):
-    async with aiohttp.ClientSession() as session:
-        async with session.get("https://animechan.xyz/api/random") as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                await ctx.send(f'"{data["quote"]}" - {data["character"]} ({data["anime"]})')
-
-# Anime search
-@bot.command()
-async def anime(ctx, *, query: str):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f"https://api.jikan.moe/v4/anime?q={query}") as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                if data["data"]:
-                    anime = data["data"][0]
-                    embed = discord.Embed(title=anime["title"], url=anime["url"], description=anime["synopsis"], color=discord.Color.green())
-                    embed.set_image(url=anime["images"]["jpg"]["image_url"])
-                    await ctx.send(embed=embed)
-                else:
-                    await ctx.send("Anime not found!")
-            else:
-                await ctx.send("Error fetching anime data!")
-
-# Character info by name
-@bot.command()
-async def character(ctx, *, name: str):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f"https://api.jikan.moe/v4/characters?q={name}") as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                if data["data"]:
-                    char = data["data"][0]
-                    embed = discord.Embed(title=char["name"], url=char["url"], color=discord.Color.purple())
-                    embed.set_image(url=char["images"]["jpg"]["image_url"])
-                    embed.add_field(name="About", value=char["about"][:500] + "...", inline=False)
-                    await ctx.send(embed=embed)
-                else:
-                    await ctx.send("Character not found!")
-            else:
-                await ctx.send("Error fetching character data!")
-
-# Meme generation
-@bot.command()
-async def meme(ctx):
-    async with aiohttp.ClientSession() as session:
-        async with session.get("https://meme-api.com/gimme") as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                embed = discord.Embed(title=data["title"], url=data["postLink"], color=discord.Color.orange())
-                embed.set_image(url=data["url"])
-                await ctx.send(embed=embed)
-            else:
-                await ctx.send("Error fetching meme!")
-
-# Anime news posting (Crunchyroll)
-@tasks.loop(hours=6)  # Adjust interval as needed
-async def post_anime_news():
-    channel_id = int(os.getenv("ANIME_NEWS_CHANNEL_ID"))  # Set this in Render environment variables
-    channel = bot.get_channel(channel_id)
-    if not channel:
-        print("Anime news channel not found!")
+# 🎭 Auto Slowmode Feature (Triggers When Spam is Detected)
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
         return
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get("https://www.crunchyroll.com/news/rss") as resp:
-            if resp.status == 200:
-                from xml.etree import ElementTree as ET
-                xml = await resp.text()
-                root = ET.fromstring(xml)
-                latest_news = root.findall(".//item")[0]
-                title = latest_news.find("title").text
-                link = latest_news.find("link").text
-                await channel.send(f"**{title}**\n{link}")
+    if len(message.content) > 200:  # Detect spam (Adjust this value as needed)
+        try:
+            await message.channel.edit(slowmode_delay=5)  # Set slowmode to 5 sec
+            await message.channel.send("⚠️ Slowmode enabled due to spam!")
+        except discord.Forbidden:
+            print("I don't have permission to edit slowmode!")
 
+    await bot.process_commands(message)
+
+# 🎉 DM New Members on Join
 @bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-    post_anime_news.start()  # Start the anime news loop
+async def on_member_join(member):
+    embed = discord.Embed(title="Welcome!", description=f"Hello {member.name}, welcome to **{member.guild.name}**! 🎉", color=discord.Color.blue())
+    embed.set_image(url=member.avatar.url)
+    try:
+        await member.send(embed=embed)
+    except discord.Forbidden:
+        print(f"Could not DM {member.name}.")
 
-# Run Flask app and bot
-if __name__ == "__main__":
-    import threading
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))).start()
-    bot.run(TOKEN)
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
