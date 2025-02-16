@@ -1,132 +1,161 @@
+import os
 import discord
-import requests
 import random
+import aiohttp
 import asyncio
 from discord.ext import commands, tasks
-from bs4 import BeautifulSoup
-import os
+from flask import Flask
 
-# Bot setup
-intents = discord.Intents.default()
-intents.typing = False
-intents.presences = False
-intents.messages = True
-intents.guilds = True
-intents.message_content = True
-intents.members = True
+# Flask app for Render port binding
+app = Flask(__name__)
 
+@app.route("/")
+def home():
+    return "Bot is running!"
+
+# Discord bot setup
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Set this in Render environment variables
+intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# --- Feature 1: Auto Slowmode for Every Channel ---
-@bot.event
-async def on_message(message):
-    if not message.author.bot:  # Avoid bot messages triggering slowmode
-        await message.channel.edit(slowmode_delay=5)  # 5-second slowmode
-    await bot.process_commands(message)
-
-# --- Feature 2: DM Members on Join with Avatar ---
-@bot.event
-async def on_member_join(member):
-    avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
-    embed = discord.Embed(title="Welcome!", description=f"Hi {member.name}, welcome to the server!", color=0x00ff00)
-    embed.set_thumbnail(url=avatar_url)
-    await member.send(embed=embed)
-
-# --- Feature 3: Fun Games (Dice Roll) ---
-@bot.command()
-async def roll(ctx):
-    number = random.randint(1, 6)
-    await ctx.send(f"🎲 You rolled a {number}!")
-
-# --- Feature 4: Pokémon Info ---
-@bot.command()
-async def pokemon(ctx, name: str):
-    url = f"https://pokeapi.co/api/v2/pokemon/{name.lower()}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        embed = discord.Embed(title=data["name"].capitalize(), color=0xff0000)
-        embed.set_thumbnail(url=data["sprites"]["front_default"])
-        embed.add_field(name="ID", value=data["id"], inline=True)
-        embed.add_field(name="Height", value=data["height"], inline=True)
-        embed.add_field(name="Weight", value=data["weight"], inline=True)
-        await ctx.send(embed=embed)
-    else:
-        await ctx.send("Pokémon not found!")
-
-# --- Feature 5: Anime Quotes ---
-@bot.command()
-async def quote(ctx):
-    quotes = [
-        "Power comes in response to a need, not a desire. – Goku",
-        "Fear is not evil. It tells you what your weaknesses are. – Gildarts Clive",
-        "A person grows up when he has to. – Jiraiya"
-    ]
-    await ctx.send(random.choice(quotes))
-
-# --- Feature 6: Anime Search ---
-@bot.command()
-async def anime(ctx, *, query: str):
-    url = f"https://myanimelist.net/search/all?q={query}"
-    await ctx.send(f"🔎 Search results for **{query}**: {url}")
-
-# --- Feature 7: Character Info ---
-@bot.command()
-async def character(ctx, *, name: str):
-    await ctx.send(f"🔎 Searching for character **{name}**...\nhttps://myanimelist.net/search/all?q={name}")
-
-# --- Feature 8: Meme Generation ---
-@bot.command()
-async def meme(ctx):
-    url = "https://meme-api.com/gimme"
-    response = requests.get(url).json()
-    embed = discord.Embed(title="Random Meme", color=0x3498db)
-    embed.set_image(url=response["url"])
-    await ctx.send(embed=embed)
-
-# --- Feature 9: Fetch Anime News (Command) ---
-@bot.command()
-async def news(ctx):
-    news_data = fetch_anime_news()
-    if news_data:
-        embed = discord.Embed(title="Latest Anime News", color=0xff5733)
-        for title, link in news_data:
-            embed.add_field(name=title, value=f"[Read more]({link})", inline=False)
-        await ctx.send(embed=embed)
-    else:
-        await ctx.send("No news found!")
-
-# --- Fetch Anime News Helper Function ---
-def fetch_anime_news():
-    url = "https://www.crunchyroll.com/news"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, "html.parser")
-    articles = soup.find_all("a", class_="news-link", limit=3)
-    
-    if articles:
-        return [(article.text.strip(), f"https://www.crunchyroll.com{article['href']}") for article in articles]
-    return []
-
-# --- Feature 10: Automatically Post Anime News ---
-@tasks.loop(hours=3)  # Runs every 3 hours
-async def post_anime_news():
-    channel_id = int(os.getenv("NEWS_CHANNEL_ID"))  # Securely fetch from Render
-    channel = bot.get_channel(channel_id)
-    
-    if channel:
-        news_data = fetch_anime_news()
-        if news_data:
-            embed = discord.Embed(title="Latest Anime News", color=0xff5733)
-            for title, link in news_data:
-                embed.add_field(name=title, value=f"[Read more]({link})", inline=False)
-            await channel.send(embed=embed)
-
-# Start the task when the bot is ready
+# Auto Slowmode (applies to every channel)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
-    post_anime_news.start()
+    for guild in bot.guilds:
+        for channel in guild.text_channels:
+            try:
+                await channel.edit(slowmode_delay=5)  # 5 seconds slowmode
+            except discord.Forbidden:
+                print(f"Missing permissions for {channel.name}")
 
-# --- Bot Token ---
-TOKEN = os.getenv("TOKEN")
-bot.run(TOKEN)
+# DM new members with avatar image
+@bot.event
+async def on_member_join(member):
+    try:
+        avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
+        embed = discord.Embed(title="Welcome!", description=f"Hello {member.mention}, welcome to the server!", color=discord.Color.blue())
+        embed.set_image(url=avatar_url)
+        await member.send(embed=embed)
+    except discord.HTTPException:
+        print(f"Could not DM {member}")
+
+# Fun game (Rock-Paper-Scissors)
+@bot.command()
+async def rps(ctx, choice: str):
+    options = ["rock", "paper", "scissors"]
+    bot_choice = random.choice(options)
+    result = f"You chose {choice}, I chose {bot_choice}."
+
+    if choice == bot_choice:
+        result += " It's a tie!"
+    elif (choice == "rock" and bot_choice == "scissors") or \
+         (choice == "paper" and bot_choice == "rock") or \
+         (choice == "scissors" and bot_choice == "paper"):
+        result += " You win!"
+    else:
+        result += " I win!"
+
+    await ctx.send(result)
+
+# Pokémon info command
+@bot.command()
+async def pokemon(ctx, name: str):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://pokeapi.co/api/v2/pokemon/{name.lower()}") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                embed = discord.Embed(title=name.capitalize(), color=discord.Color.red())
+                embed.set_image(url=data["sprites"]["front_default"])
+                embed.add_field(name="Type", value=", ".join(t["type"]["name"] for t in data["types"]))
+                await ctx.send(embed=embed)
+            else:
+                await ctx.send("Pokémon not found!")
+
+# Anime quotes
+@bot.command()
+async def animequote(ctx):
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://animechan.xyz/api/random") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                await ctx.send(f'"{data["quote"]}" - {data["character"]} ({data["anime"]})')
+
+# Anime search
+@bot.command()
+async def anime(ctx, *, query: str):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://api.jikan.moe/v4/anime?q={query}") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data["data"]:
+                    anime = data["data"][0]
+                    embed = discord.Embed(title=anime["title"], url=anime["url"], description=anime["synopsis"], color=discord.Color.green())
+                    embed.set_image(url=anime["images"]["jpg"]["image_url"])
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send("Anime not found!")
+            else:
+                await ctx.send("Error fetching anime data!")
+
+# Character info by name
+@bot.command()
+async def character(ctx, *, name: str):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://api.jikan.moe/v4/characters?q={name}") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data["data"]:
+                    char = data["data"][0]
+                    embed = discord.Embed(title=char["name"], url=char["url"], color=discord.Color.purple())
+                    embed.set_image(url=char["images"]["jpg"]["image_url"])
+                    embed.add_field(name="About", value=char["about"][:500] + "...", inline=False)
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send("Character not found!")
+            else:
+                await ctx.send("Error fetching character data!")
+
+# Meme generation
+@bot.command()
+async def meme(ctx):
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://meme-api.com/gimme") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                embed = discord.Embed(title=data["title"], url=data["postLink"], color=discord.Color.orange())
+                embed.set_image(url=data["url"])
+                await ctx.send(embed=embed)
+            else:
+                await ctx.send("Error fetching meme!")
+
+# Anime news posting (Crunchyroll)
+@tasks.loop(hours=6)  # Adjust interval as needed
+async def post_anime_news():
+    channel_id = int(os.getenv("ANIME_NEWS_CHANNEL_ID"))  # Set this in Render environment variables
+    channel = bot.get_channel(channel_id)
+    if not channel:
+        print("Anime news channel not found!")
+        return
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://www.crunchyroll.com/news/rss") as resp:
+            if resp.status == 200:
+                from xml.etree import ElementTree as ET
+                xml = await resp.text()
+                root = ET.fromstring(xml)
+                latest_news = root.findall(".//item")[0]
+                title = latest_news.find("title").text
+                link = latest_news.find("link").text
+                await channel.send(f"**{title}**\n{link}")
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    post_anime_news.start()  # Start the anime news loop
+
+# Run Flask app and bot
+if __name__ == "__main__":
+    import threading
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))).start()
+    bot.run(TOKEN)
