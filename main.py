@@ -4,7 +4,24 @@ import aiohttp
 import random
 import time
 import os
+from flask import Flask
+import threading
 
+# Flask Web Server for Status Page
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_web():
+    port = int(os.getenv("PORT", 8080))  # Default to 8080 if PORT is not set
+    app.run(host="0.0.0.0", port=port)
+
+thread = threading.Thread(target=run_web)
+thread.start()
+
+# Discord Bot Setup
 intents = discord.Intents.default()
 intents.typing = False
 intents.presences = False
@@ -15,7 +32,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
-    
+
 # 🏓 Ping Command
 @bot.command()
 async def ping(ctx):
@@ -128,31 +145,15 @@ async def userinfo(ctx, member: discord.Member = None):
     embed.add_field(name="🎭 Roles", value=", ".join([role.name for role in member.roles if role.name != "@everyone"]), inline=False)
     await ctx.send(embed=embed)
 
-# 🎭 Rock-Paper-Scissors Command
-@bot.command()
-async def rps(ctx, choice: str):
-    choices = ["rock", "paper", "scissors"]
-    if choice.lower() not in choices:
-        await ctx.send("Choose **rock, paper, or scissors**.")
-        return
-    bot_choice = random.choice(choices)
-    if choice == bot_choice:
-        result = "It's a tie!"
-    elif (choice == "rock" and bot_choice == "scissors") or (choice == "scissors" and bot_choice == "paper") or (choice == "paper" and bot_choice == "rock"):
-        result = "You win! 🎉"
-    else:
-        result = "I win! 😈"
-    await ctx.send(f"**You chose:** {choice}\n**I chose:** {bot_choice}\n**{result}**")
-
-# 🎭 Auto Slowmode Feature (Triggers When Spam is Detected)
+# 🎭 Auto Slowmode Feature
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
 
-    if len(message.content) > 200:  # Detect spam (Adjust this value as needed)
+    if len(message.content) > 200:
         try:
-            await message.channel.edit(slowmode_delay=5)  # Set slowmode to 5 sec
+            await message.channel.edit(slowmode_delay=5)
             await message.channel.send("⚠️ Slowmode enabled due to spam!")
         except discord.Forbidden:
             print("I don't have permission to edit slowmode!")
