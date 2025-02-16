@@ -21,11 +21,10 @@ def run_web():
 thread = threading.Thread(target=run_web)
 thread.start()
 
-# Discord Bot Setup
+# ✅ Enable Required Intents
 intents = discord.Intents.default()
-intents.typing = False
-intents.presences = False
-intents.members = True  # Required for user info commands
+intents.message_content = True  # Fix for commands not working
+intents.members = True  # Needed for user info and welcome messages
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -158,7 +157,7 @@ async def on_message(message):
         except discord.Forbidden:
             print("I don't have permission to edit slowmode!")
 
-    await bot.process_commands(message)
+    await bot.process_commands(message)  # ✅ Fix to ensure commands work
 
 # 🎉 DM New Members on Join
 @bot.event
