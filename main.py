@@ -65,18 +65,19 @@ async def pokemon(ctx, *, name):
             else:
                 await ctx.send("⚠️ Pokémon not found!")
 
-# 🎭 Anime Character Search
+# 🎭 Anime Character Search (Fixed)
 @bot.command()
 async def character(ctx, *, name):
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"https://api.jikan.moe/v4/characters?q={name}") as resp:
+        async with session.get(f"https://api.jikan.moe/v4/characters?q={name}&limit=1") as resp:
             if resp.status == 200:
                 data = await resp.json()
                 if data["data"]:
                     char_info = data["data"][0]
                     embed = discord.Embed(title=char_info["name"], url=char_info["url"], color=discord.Color.blue())
                     embed.set_image(url=char_info["images"]["jpg"]["image_url"])
-                    embed.add_field(name="🎭 Anime", value=", ".join([anime["anime"]["title"] for anime in char_info["anime"][:3]]), inline=False)
+                    anime_titles = [anime["anime"]["title"] for anime in char_info["anime"][:3]]
+                    embed.add_field(name="🎭 Appeared In", value=", ".join(anime_titles) if anime_titles else "N/A", inline=False)
                     await ctx.send(embed=embed)
                 else:
                     await ctx.send("⚠️ No character found!")
@@ -119,7 +120,7 @@ async def manga(ctx, *, name):
             else:
                 await ctx.send("⚠️ Error fetching manga details!")
 
-# 🎴 Anime Image Commands
+# 🖼 Anime Image Commands
 @bot.command()
 async def waifu(ctx):
     async with aiohttp.ClientSession() as session:
@@ -144,7 +145,7 @@ async def neko(ctx):
                 data = await resp.json()
                 await ctx.send(data["url"])
 
-# 🖼 Avatar Command
+# 🆔 Avatar Command
 @bot.command()
 async def avatar(ctx, member: discord.Member = None):
     member = member or ctx.author
