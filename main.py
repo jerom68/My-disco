@@ -48,27 +48,58 @@ async def eightball(ctx, *, question):
     responses = ["Yes!", "No.", "Maybe...", "Definitely!", "Not sure.", "Ask again later."]
     await ctx.send(f"🎱 {random.choice(responses)}")
 
-# 😂 Joke Command
+# 🏆 Pokémon Info Command
 @bot.command()
-async def joke(ctx):
+async def pokemon(ctx, *, name):
     async with aiohttp.ClientSession() as session:
-        async with session.get("https://official-joke-api.appspot.com/random_joke") as resp:
+        async with session.get(f"https://pokeapi.co/api/v2/pokemon/{name.lower()}") as resp:
             if resp.status == 200:
-                joke_data = await resp.json()
-                await ctx.send(f"{joke_data['setup']} - {joke_data['punchline']}")
+                data = await resp.json()
+                embed = discord.Embed(title=data["name"].capitalize(), color=discord.Color.red())
+                embed.set_thumbnail(url=data["sprites"]["front_default"])
+                embed.add_field(name="⚡ Base Experience", value=data["base_experience"], inline=True)
+                embed.add_field(name="🛡️ Defense", value=data["stats"][2]["base_stat"], inline=True)
+                embed.add_field(name="⚔️ Attack", value=data["stats"][1]["base_stat"], inline=True)
+                embed.add_field(name="❤️ HP", value=data["stats"][0]["base_stat"], inline=True)
+                await ctx.send(embed=embed)
             else:
-                await ctx.send("Couldn't fetch a joke at the moment!")
+                await ctx.send("⚠️ Pokémon not found!")
 
-# 🤯 Fun Fact Command
+# 🎭 Anime Character Search
 @bot.command()
-async def fact(ctx):
+async def character(ctx, *, name):
     async with aiohttp.ClientSession() as session:
-        async with session.get("https://uselessfacts.jsph.pl/random.json?language=en") as resp:
+        async with session.get(f"https://api.jikan.moe/v4/characters?q={name}") as resp:
             if resp.status == 200:
-                fact_data = await resp.json()
-                await ctx.send(f"💡 Fun Fact: {fact_data['text']}")
+                data = await resp.json()
+                if data["data"]:
+                    char_info = data["data"][0]
+                    embed = discord.Embed(title=char_info["name"], url=char_info["url"], color=discord.Color.blue())
+                    embed.set_image(url=char_info["images"]["jpg"]["image_url"])
+                    embed.add_field(name="🎭 Anime", value=", ".join([anime["anime"]["title"] for anime in char_info["anime"][:3]]), inline=False)
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send("⚠️ No character found!")
             else:
-                await ctx.send("Couldn't fetch a fun fact at the moment!")
+                await ctx.send("⚠️ Error fetching character details!")
+
+# 🎬 Anime Search Command
+@bot.command()
+async def anime(ctx, *, name):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://api.jikan.moe/v4/anime?q={name}") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data["data"]:
+                    anime_info = data["data"][0]
+                    embed = discord.Embed(title=anime_info["title"], url=anime_info["url"], color=discord.Color.green())
+                    embed.add_field(name="📖 Synopsis", value=anime_info["synopsis"][:500] + "...", inline=False)
+                    embed.set_thumbnail(url=anime_info["images"]["jpg"]["image_url"])
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send("⚠️ No anime found!")
+            else:
+                await ctx.send("⚠️ Error fetching anime details!")
 
 # 📚 Manga Search Command
 @bot.command()
@@ -84,9 +115,9 @@ async def manga(ctx, *, name):
                     embed.set_image(url=manga_info["images"]["jpg"]["image_url"])
                     await ctx.send(embed=embed)
                 else:
-                    await ctx.send("No manga found with that name!")
+                    await ctx.send("⚠️ No manga found!")
             else:
-                await ctx.send("Couldn't fetch manga details at the moment.")
+                await ctx.send("⚠️ Error fetching manga details!")
 
 # 🎴 Anime Image Commands
 @bot.command()
@@ -143,30 +174,5 @@ async def userinfo(ctx, member: discord.Member = None):
     embed.add_field(name="📅 Joined At", value=member.joined_at.strftime("%Y-%m-%d"), inline=True)
     embed.add_field(name="🎭 Roles", value=", ".join([role.name for role in member.roles if role.name != "@everyone"]), inline=False)
     await ctx.send(embed=embed)
-
-# 🎭 Auto Slowmode Feature
-@bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
-
-    if len(message.content) > 200:
-        try:
-            await message.channel.edit(slowmode_delay=5)
-            await message.channel.send("⚠️ Slowmode enabled due to spam!")
-        except discord.Forbidden:
-            print("I don't have permission to edit slowmode!")
-
-    await bot.process_commands(message)  # ✅ Fix to ensure commands work
-
-# 🎉 DM New Members on Join
-@bot.event
-async def on_member_join(member):
-    embed = discord.Embed(title="Welcome!", description=f"Hello {member.name}, welcome to **{member.guild.name}**! 🎉", color=discord.Color.blue())
-    embed.set_image(url=member.avatar.url)
-    try:
-        await member.send(embed=embed)
-    except discord.Forbidden:
-        print(f"Could not DM {member.name}.")
 
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
